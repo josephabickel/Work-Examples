@@ -1,0 +1,310 @@
+USE [BI_RL]
+GO
+
+/****** Object:  StoredProcedure [dbo].[Update_Service_OTD]    Script Date: 1/17/2023 9:36:53 AM ******/
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+
+
+
+
+
+
+
+
+
+CREATE PROCEDURE [dbo].[Update_Service_OTD]
+AS
+
+;
+WITH Orders AS   (
+               SELECT
+                    oh.[ERDAT_SIMP_DT: (GC) Date on Which Record Was Created]   AS Doc_Date
+                    ,oh.[VBELN: (PK) Sales Document]							AS Sales_Doc
+					,oh.[VDATU: Requested delivery date]						AS Req_Del_Date
+                    ,ol.[MATNR: Material Number]								AS Material
+                    ,ol.[POSNR: (PK) Sales Document Item]						AS Item_No
+                    ,ol.[KWMENG: Cumulative Order Quantity in Sales Units]		AS Order_Qty
+                    ,ol.[VSTEL: Shipping Point/Receiving Point]					AS Ship_Plant
+                    ,oh.[AUART: Sales Document Type]							AS Sales_Doc_Type
+                    ,ol.[WERKS: Plant (Own or External)]						AS Plant
+                    ,ol.[ROUTE: Route]											AS "Route"
+					,m.[MVGR5: Product Identifier]                              AS Product_ID
+			    	,mm.[BUDAT: Posting Date in the Document]					AS GD_Posting_Date
+                    ,pm.[BOLNR: Bill of lading]									AS Tracking_No
+					,mmm.[PRAT5: FRU for Service]								AS [FRU Flag]
+					,ROW_NUMBER() OVER(PARTITION BY(CONCAT(oh.[VBELN: (PK) Sales Document],ol.[POSNR: (PK) Sales Document Item])) ORDER BY m.[VKORG: (PK) Sales Organization]) AS Row_No
+
+                 FROM [SIMPServerData].[dbo].[VBAP] ol
+                  JOIN [SIMPServerData].[dbo].[VBAK] oh
+                   ON oh.[VBELN: (PK) Sales Document]       = ol.[VBELN: (PK) Sales Document]
+                  LEFT JOIN [SIMPServerData].[dbo].[LIPS] dl
+                   ON ol.[VBELN: (PK) Sales Document]       = dl.[VGBEL: Document number of the reference document] 
+				   AND ol.[POSNR: (PK) Sales Document Item] = dl.[VGPOS: Item number of the reference item]
+                  LEFT JOIN [SIMPServerData].[dbo].[MVKE] m
+				   ON ol.[MATNR: Material Number] = m.[MATNR: (PK) Material Number]				              
+                  LEFT JOIN [SIMPServerData].[dbo].[MKPF] mm
+				    ON dl.[VBELN: (PK) Delivery]			   = mm.[LE_VBELN: Delivery]
+				  LEFT JOIN [SIMPServerData].[dbo].[LIKP] pm
+                    ON dl.[VBELN: (PK) Delivery]			   = pm.[VBELN: (PK) Delivery]
+				  LEFT JOIN [SIMPServerData].[dbo].[MVKE] mmm
+				    ON ol.[MATNR: Material Number] = mmm.[MATNR: (PK) Material Number]
+					AND 'OM01' = mmm.[VKORG: (PK) Sales Organization]
+
+                  WHERE
+
+                    oh.[VDATU: Requested delivery date] >= CONVERT(DATE,DATEADD(day,-1,GETDATE()))
+				   AND oh.[VDATU: Requested delivery date] <= CONVERT(DATE,GETDATE())
+                   AND oh.[AUART: Sales Document Type]             = 'ZSVC'
+				   AND ol.[WERKS: Plant (Own or External)]       IN ('1001','1002','2001','2002','2008')
+				   AND m.[VKORG: (PK) Sales Organization] IN ('OM01','OM02')
+				   AND oh.[VDATU: Requested delivery date] <> '00000000'
+				   AND ol.[ABGRU: Reason for rejection of quotations and sales orders] = ''
+				   AND ol.[MATNR: Material Number] NOT IN ('000000000358920001','IT00059','IT00060 ','IT00061','000000000298920077'
+				   ,'000000000298920078','000000000998920030','HR060900','000000000298920154')
+			   )
+,Inventory1 AS(
+		SELECT DISTINCT 
+		Material
+		,Plant
+
+		FROM Orders
+)
+,InventoryTH AS(
+		SELECT
+		i.Material
+		,i.Plant
+		,SUM(m.[LABST: Valuated Unrestricted-Use Stock]) AS [Stock]
+		,SUM(m.[INSME: Stock in Quality Inspection]) AS [QA Stock]
+			
+			FROM Inventory1 i
+			LEFT JOIN [SIMPServerData].[dbo].[MARD] m
+			 ON i.Material = m.[MATNR: (PK) Material Number]
+			 AND i.Plant = m.[WERKS: (PK) Plant]
+
+		WHERE 
+		m.[WERKS: (PK) Plant] = '2008'
+
+		GROUP BY 
+		i.Material
+		,i.Plant
+)
+,InventorySTP AS(
+		SELECT
+		i.Material
+		,i.Plant
+		,SUM(m.[LABST: Valuated Unrestricted-Use Stock]) AS [Stock]
+		,SUM(m.[INSME: Stock in Quality Inspection]) AS [QA Stock]
+			
+			FROM Inventory1 i
+			LEFT JOIN [SIMPServerData].[dbo].[MARD] m
+			 ON i.Material = m.[MATNR: (PK) Material Number]
+			 AND i.Plant = m.[WERKS: (PK) Plant]
+
+		WHERE 
+		m.[WERKS: (PK) Plant] = '2001'
+		AND m.[LGORT: (PK) Storage Location] = 'ENGN'
+
+		GROUP BY 
+		i.Material
+		,i.Plant
+)
+,InventoryMWO AS(
+		SELECT
+		i.Material
+		,i.Plant
+		,SUM(m.[LABST: Valuated Unrestricted-Use Stock]) AS [Stock]
+		,SUM(m.[INSME: Stock in Quality Inspection]) AS [QA Stock]
+			
+			FROM Inventory1 i
+			LEFT JOIN [SIMPServerData].[dbo].[MARD] m
+			 ON i.Material = m.[MATNR: (PK) Material Number]
+			 AND i.Plant = m.[WERKS: (PK) Plant]
+
+		WHERE 
+		m.[WERKS: (PK) Plant] = '1002'
+		AND m.[LGORT: (PK) Storage Location] NOT IN ('MFRM','MWQC','MWHV','MFWH','MWPA')
+
+		GROUP BY 
+		i.Material
+		,i.Plant
+)
+,InventoryMIL AS(
+
+		SELECT
+		i.Material
+		,i.Plant
+		,SUM(m.[LABST: Valuated Unrestricted-Use Stock]) AS [Stock]
+		,SUM(m.[INSME: Stock in Quality Inspection]) AS [QA Stock]
+			
+			FROM Inventory1 i
+			LEFT JOIN [SIMPServerData].[dbo].[MARD] m
+			 ON i.Material = m.[MATNR: (PK) Material Number]
+			 AND i.Plant = m.[WERKS: (PK) Plant]
+
+		WHERE 
+		m.[WERKS: (PK) Plant] = '1001'
+
+		GROUP BY 
+		i.Material
+		,i.Plant
+)
+,Total_Inventory AS(
+		SELECT
+		i.Material
+		,i.Plant
+		,CASE
+		WHEN i.Plant = '1001' THEN mil.Stock
+		WHEN i.Plant = '1002' THEN mwo.Stock
+		WHEN i.Plant = '2008' THEN th.Stock
+		ELSE stp.Stock
+		END AS Stock
+		,CASE
+		WHEN i.Plant = '1001' THEN mil.[QA Stock]
+		WHEN i.Plant = '1002' THEN mwo.[QA Stock]
+		WHEN i.Plant = '2008' THEN th.[QA Stock]
+		ELSE stp.[QA Stock]
+		END AS [QA Stock]
+
+		FROM Inventory1 i
+		LEFT JOIN InventoryMWO mwo
+		 ON i.Material = mwo.Material
+		 AND i.Plant = mwo.Plant
+		LEFT JOIN InventoryTH th
+		 ON i.Material = th.Material
+		 AND i.Plant = th.Plant
+		LEFT JOIN InventorySTP stp
+		 ON i.Material = stp.Material
+		 AND i.Plant = stp.Plant
+		LEFT JOIN InventoryMIL mil
+		 ON i.Material = mil.Material
+		 AND i.Plant = mil.Plant
+)
+
+INSERT INTO [dbo].[Service OTD - All Plants]
+(
+		[Doc Date]
+      ,[Sales Doc]
+      ,[Material]
+      ,[Desc]
+      ,[Item No]
+      ,[Req Del Date]
+      ,[Order Qty]
+      ,[Ship Plant]
+      ,[Ship Plant Name]
+      ,[GD Posting Date]
+      ,[Sales Doc Type]
+      ,[Tracking No]
+      ,[Plant]
+      ,[Route]
+      ,[Route Days]
+      ,[Product ID]
+      ,[Stock]
+      ,[Next PO Number]
+      ,[Next PO Date]
+      ,[Next PO Qty]
+      ,[All PO Qty]
+      ,[Make/Purchase]
+      ,[Buyer Code]
+      ,[Buyer Name]
+      ,[SAP On-Time Determination]
+	  ,[QA Stock]
+	  ,[Timestamp]
+	  ,[FRU Flag]
+)
+
+
+
+				SELECT
+                  o.Doc_Date AS [Doc Date]
+                  ,RIGHT(o.Sales_Doc,8) AS [Sales Doc]
+                  ,CASE
+				  WHEN LEN(o.Material) = 18 THEN REPLACE(LTRIM(REPLACE(o.Material, '0', ' ')), ' ', '0')
+				  ELSE o.Material END AS Material
+				  ,m.[MAKTX: Material Description (Short Text)] AS [Desc]
+                  ,CASE
+				   WHEN SUBSTRING(o.Item_No,4,1) = 0 THEN RIGHT(o.item_No,2)
+				   ELSE RIGHT (o.item_no,3)
+				   END AS [Item No]
+                  ,CONVERT(DATE,o.Req_Del_Date) AS [Req Del Date]
+                  ,o.Order_Qty AS [Order Qty]
+                  ,o.Ship_Plant AS [Ship Plant]
+				  ,CASE 
+				  WHEN o.Ship_Plant = '1001' THEN 'Milpitas'
+				  WHEN o.Ship_Plant = '1002' THEN 'MWO'
+				  WHEN o.Ship_Plant = '2101' THEN 'Thornhill'
+				  ELSE 'St.Pete' 
+				  END AS [Ship Plant Name]
+                  ,CONVERT(DATE,o.GD_Posting_Date) AS [GD Posting Date]
+                  ,o.Sales_Doc_Type AS [Sales Doc Type]
+                  ,o.Tracking_No AS [Tracking No]
+                  ,o.Plant
+                  ,o.[Route]
+				  ,d.[Days] AS [Route Days]
+				  ,o.Product_ID AS [Product ID]
+				  ,t.Stock
+				  ,p.[Next PO Number]
+				  ,p.[Next PO Date]
+				  ,p.[Next PO Qty]
+				  ,p.[All PO Qty]
+				  ,CASE WHEN c.[BESKZ: Procurement Type] = 'F' THEN 'Buy'
+				  ELSE 'Make' 
+				  END  AS [Make/Purchase]
+				  ,c.[EKGRP: Purchasing Group] AS [Buyer Code]
+				  ,pn.[Name] AS [Buyer Name]
+				  ,CASE
+				  WHEN o.[Route] = 'LOCP' THEN 'On-Time'
+				  WHEN DATEADD(day,d.[days],o.GD_Posting_Date) > o.Req_Del_Date THEN 'Late' 
+				  WHEN o.GD_Posting_Date IS NULL THEN 'Late'
+				  ELSE 'On-Time' END AS [SAP On-Time Determination]
+				  ,t.[QA Stock]
+				  ,GETDATE() AS [Timestamp]
+				  ,o.[FRU Flag]
+
+
+				  
+				 
+			 FROM Orders o
+			 LEFT JOIN Total_Inventory t
+			  ON o.Material = t.Material
+			  AND o.Plant = t.Plant
+			 LEFT JOIN [BI_RL].[dbo].[Order Routes and Days till Delivery] d
+			  ON o.[Route] = d.[Route]
+			 LEFT JOIN [BI_RL].[dbo].[ALL_SVC_PO_SUM] p
+			  ON t.Material = p.Material
+			  AND t.Plant = p.Plant
+			 LEFT JOIN [SIMPServerData].[dbo].[MARC] c
+			  ON o.Material = c.[MATNR: (PK) Material Number]
+			  AND o.Plant = c.[WERKS: (PK) Plant]
+			 LEFT JOIN [BI_RL].[dbo].[Purchasing Group Name] pn
+			  ON c.[EKGRP: Purchasing Group] = pn.[Purchaser Group] 
+			 LEFT JOIN [SIMPServerData].[dbo].[MAKT] m
+			  ON o.Material = m.[MATNR: (PK) Material Number]
+			  AND 'e' = m.[SPRAS: (PK) Language Key]
+
+				
+				WHERE o.Row_No = 1
+
+;
+
+
+
+       WITH del AS 
+        (
+         SELECT [Sales Doc],
+               [Item No],
+				[Timestamp],
+                ROW_NUMBER() OVER ( PARTITION BY(CONCAT([Sales Doc],[Item No])) ORDER BY [Timestamp]) AS rn
+           FROM [BI_RL].[dbo].[Service OTD - All Plants]
+         )  
+
+DELETE del
+WHERE
+ rn > 1
+GO
+
+

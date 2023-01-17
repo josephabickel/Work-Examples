@@ -1,0 +1,44 @@
+import pandas as pd
+import pyodbc
+
+# Import CSV
+data = pd.read_csv ('Roster.csv')
+df = pd.DataFrame(data)
+
+# Connect to SQL Server
+conn = pyodbc.connect('DRIVER={ODBC Driver 18 for SQL Server};'
+                      'SERVER=testserver;'
+                      'Database=QA;'
+                      'Trusted_Connection=yes;')
+
+
+cursor = conn.cursor()
+
+# Create Table
+
+cursor.execute('''
+        CREATE TABLE Roster (
+            TeamName nvarchar(50),
+            FirstName nvarchar(50),
+            LastName nvarchar(50),
+            Email nvarchar(50),
+            Phone nvarchar(50),
+            BrandName nvarchar(50),
+            )
+           ''')
+
+# Insert DF into Table
+
+for row in df.intertuples():
+    cursor.execute('''
+            INSERT INTO Roster (TeamName, FirstName, LastName, Email, Phone, BrandName)
+            Values (?,?,?,?,?,?)
+              ''',
+            row.TeamName,
+            row.FirstName,
+            row.LastName,
+            row.Email,
+            row.Phone,
+            row.BrandName,
+              )
+conn.commit()
