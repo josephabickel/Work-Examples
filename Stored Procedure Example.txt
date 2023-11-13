@@ -11,12 +11,6 @@ GO
 
 
 
-
-
-
-
-
-
 CREATE PROCEDURE [dbo].[Update_Service_OTD]
 AS
 
