@@ -21,6 +21,9 @@ CREATE PROCEDURE [dbo].[Update_Service_OTD]
 AS
 
 ;
+
+-- Find all Service Orders in the last 2 days
+
 WITH Orders AS   (
                SELECT
                     oh.[ERDAT_SIMP_DT: (GC) Date on Which Record Was Created]   AS Doc_Date
@@ -76,6 +79,7 @@ WITH Orders AS   (
 
 		FROM Orders
 )
+-- Pennsylvania Inventory
 ,InventoryTH AS(
 		SELECT
 		i.Material
@@ -95,6 +99,7 @@ WITH Orders AS   (
 		i.Material
 		,i.Plant
 )
+-- Florida Inventory
 ,InventorySTP AS(
 		SELECT
 		i.Material
@@ -115,6 +120,7 @@ WITH Orders AS   (
 		i.Material
 		,i.Plant
 )
+-- Illinois Inventory
 ,InventoryMWO AS(
 		SELECT
 		i.Material
@@ -135,6 +141,7 @@ WITH Orders AS   (
 		i.Material
 		,i.Plant
 )
+-- California Inventory
 ,InventoryMIL AS(
 
 		SELECT
@@ -155,6 +162,7 @@ WITH Orders AS   (
 		i.Material
 		,i.Plant
 )
+-- Combine all inventory
 ,Total_Inventory AS(
 		SELECT
 		i.Material
@@ -295,7 +303,7 @@ INSERT INTO [dbo].[Service OTD - All Plants]
 
 ;
 
-
+-- Delete the most recent row (duplicates)
 
        WITH del AS 
         (
