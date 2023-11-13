@@ -25,19 +25,21 @@ WITH Orders AS   (
                SELECT
                     oh.[ERDAT_SIMP_DT: (GC) Date on Which Record Was Created]   AS Doc_Date
                     ,oh.[VBELN: (PK) Sales Document]							AS Sales_Doc
-					,oh.[VDATU: Requested delivery date]						AS Req_Del_Date
-                    ,ol.[MATNR: Material Number]								AS Material
+		    ,oh.[VDATU: Requested delivery date]						AS Req_Del_Date
+                    ,ol.[MATNR: Material Number]							AS Material
                     ,ol.[POSNR: (PK) Sales Document Item]						AS Item_No
-                    ,ol.[KWMENG: Cumulative Order Quantity in Sales Units]		AS Order_Qty
-                    ,ol.[VSTEL: Shipping Point/Receiving Point]					AS Ship_Plant
+                    ,ol.[KWMENG: Cumulative Order Quantity in Sales Units]			        AS Order_Qty
+                    ,ol.[VSTEL: Shipping Point/Receiving Point]					        AS Ship_Plant
                     ,oh.[AUART: Sales Document Type]							AS Sales_Doc_Type
                     ,ol.[WERKS: Plant (Own or External)]						AS Plant
-                    ,ol.[ROUTE: Route]											AS "Route"
-					,m.[MVGR5: Product Identifier]                              AS Product_ID
-			    	,mm.[BUDAT: Posting Date in the Document]					AS GD_Posting_Date
-                    ,pm.[BOLNR: Bill of lading]									AS Tracking_No
-					,mmm.[PRAT5: FRU for Service]								AS [FRU Flag]
-					,ROW_NUMBER() OVER(PARTITION BY(CONCAT(oh.[VBELN: (PK) Sales Document],ol.[POSNR: (PK) Sales Document Item])) ORDER BY m.[VKORG: (PK) Sales Organization]) AS Row_No
+                    ,ol.[ROUTE: Route]									AS "Route"
+		    ,m.[MVGR5: Product Identifier]                                  			AS Product_ID
+		    ,mm.[BUDAT: Posting Date in the Document]						AS GD_Posting_Date
+                    ,pm.[BOLNR: Bill of lading]								AS Tracking_No
+		    ,mmm.[PRAT5: FRU for Service]							AS [FRU Flag]
+		    ,ROW_NUMBER() 
+			OVER(PARTITION BY(CONCAT(oh.[VBELN: (PK) Sales Document],ol.[POSNR: (PK) Sales Document Item])) 
+			ORDER BY m.[VKORG: (PK) Sales Organization]) 					AS Row_No
 
                  FROM [SIMPServerData].[dbo].[VBAP] ol
                   JOIN [SIMPServerData].[dbo].[VBAK] oh
@@ -187,7 +189,7 @@ WITH Orders AS   (
 
 INSERT INTO [dbo].[Service OTD - All Plants]
 (
-		[Doc Date]
+       [Doc Date]
       ,[Sales Doc]
       ,[Material]
       ,[Desc]
@@ -212,58 +214,60 @@ INSERT INTO [dbo].[Service OTD - All Plants]
       ,[Buyer Code]
       ,[Buyer Name]
       ,[SAP On-Time Determination]
-	  ,[QA Stock]
-	  ,[Timestamp]
-	  ,[FRU Flag]
+      ,[QA Stock]
+      ,[Timestamp]
+      ,[FRU Flag]
 )
 
 
 
-				SELECT
-                  o.Doc_Date AS [Doc Date]
-                  ,RIGHT(o.Sales_Doc,8) AS [Sales Doc]
-                  ,CASE
-				  WHEN LEN(o.Material) = 18 THEN REPLACE(LTRIM(REPLACE(o.Material, '0', ' ')), ' ', '0')
-				  ELSE o.Material END AS Material
-				  ,m.[MAKTX: Material Description (Short Text)] AS [Desc]
-                  ,CASE
-				   WHEN SUBSTRING(o.Item_No,4,1) = 0 THEN RIGHT(o.item_No,2)
-				   ELSE RIGHT (o.item_no,3)
-				   END AS [Item No]
-                  ,CONVERT(DATE,o.Req_Del_Date) AS [Req Del Date]
-                  ,o.Order_Qty AS [Order Qty]
-                  ,o.Ship_Plant AS [Ship Plant]
-				  ,CASE 
-				  WHEN o.Ship_Plant = '1001' THEN 'Milpitas'
-				  WHEN o.Ship_Plant = '1002' THEN 'MWO'
-				  WHEN o.Ship_Plant = '2101' THEN 'Thornhill'
-				  ELSE 'St.Pete' 
-				  END AS [Ship Plant Name]
-                  ,CONVERT(DATE,o.GD_Posting_Date) AS [GD Posting Date]
-                  ,o.Sales_Doc_Type AS [Sales Doc Type]
-                  ,o.Tracking_No AS [Tracking No]
-                  ,o.Plant
-                  ,o.[Route]
-				  ,d.[Days] AS [Route Days]
-				  ,o.Product_ID AS [Product ID]
-				  ,t.Stock
-				  ,p.[Next PO Number]
-				  ,p.[Next PO Date]
-				  ,p.[Next PO Qty]
-				  ,p.[All PO Qty]
-				  ,CASE WHEN c.[BESKZ: Procurement Type] = 'F' THEN 'Buy'
-				  ELSE 'Make' 
-				  END  AS [Make/Purchase]
-				  ,c.[EKGRP: Purchasing Group] AS [Buyer Code]
-				  ,pn.[Name] AS [Buyer Name]
-				  ,CASE
-				  WHEN o.[Route] = 'LOCP' THEN 'On-Time'
-				  WHEN DATEADD(day,d.[days],o.GD_Posting_Date) > o.Req_Del_Date THEN 'Late' 
-				  WHEN o.GD_Posting_Date IS NULL THEN 'Late'
-				  ELSE 'On-Time' END AS [SAP On-Time Determination]
-				  ,t.[QA Stock]
-				  ,GETDATE() AS [Timestamp]
-				  ,o.[FRU Flag]
+	SELECT
+                o.Doc_Date AS [Doc Date]
+                ,RIGHT(o.Sales_Doc,8) AS [Sales Doc]
+                ,CASE
+			WHEN LEN(o.Material) = 18 THEN REPLACE(LTRIM(REPLACE(o.Material, '0', ' ')), ' ', '0')
+			ELSE o.Material
+		END AS Material
+		,m.[MAKTX: Material Description (Short Text)] AS [Desc]
+                ,CASE
+			WHEN SUBSTRING(o.Item_No,4,1) = 0 THEN RIGHT(o.item_No,2)
+			ELSE RIGHT (o.item_no,3)
+		END AS [Item No]
+                ,CONVERT(DATE,o.Req_Del_Date) AS [Req Del Date]
+                ,o.Order_Qty AS [Order Qty]
+                ,o.Ship_Plant AS [Ship Plant]
+		,CASE 
+			WHEN o.Ship_Plant = '1001' THEN 'Milpitas'
+			WHEN o.Ship_Plant = '1002' THEN 'MWO'
+			WHEN o.Ship_Plant = '2101' THEN 'Thornhill'
+			ELSE 'St.Pete' 
+		END AS [Ship Plant Name]
+                ,CONVERT(DATE,o.GD_Posting_Date) AS [GD Posting Date]
+                ,o.Sales_Doc_Type AS [Sales Doc Type]
+                ,o.Tracking_No AS [Tracking No]
+                ,o.Plant
+                ,o.[Route]
+		,d.[Days] AS [Route Days]
+		,o.Product_ID AS [Product ID]
+		,t.Stock
+		,p.[Next PO Number]
+		,p.[Next PO Date]
+		,p.[Next PO Qty]
+		,p.[All PO Qty]
+		,CASE WHEN c.[BESKZ: Procurement Type] = 'F' THEN 'Buy'
+		ELSE 'Make' 
+		END  AS [Make/Purchase]
+		,c.[EKGRP: Purchasing Group] AS [Buyer Code]
+		,pn.[Name] AS [Buyer Name]
+		,CASE
+		  WHEN o.[Route] = 'LOCP' THEN 'On-Time'
+		  WHEN DATEADD(day,d.[days],o.GD_Posting_Date) > o.Req_Del_Date THEN 'Late' 
+		  WHEN o.GD_Posting_Date IS NULL THEN 'Late'
+		 ELSE 'On-Time' 
+		END AS [SAP On-Time Determination]
+		,t.[QA Stock]
+		,GETDATE() AS [Timestamp]
+		,o.[FRU Flag]
 
 
 				  
