@@ -1,3 +1,6 @@
+-- Find the Shipment and Return dates of drawers by serial number
+
+
 CREATE VIEW [dbo].[ShipmentHistory_SerialNo] 
 AS
  
